@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d1117;
+    color: #e2e8f0;
+    user-select: none;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d1117;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2d3748;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4a5568;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full bg-[#0d1117] border border-[#3d4a5c] rounded px-2 py-1.5 text-xs text-[#e2e8f0] outline-none focus:border-[#64748b];
+  }
+
+  select.input {
+    @apply cursor-pointer;
+  }
+
+  .btn-primary {
+    @apply px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded font-medium transition-colors;
+  }
+
+  .btn-secondary {
+    @apply px-3 py-1.5 bg-[#2d3748] hover:bg-[#374151] text-[#e2e8f0] text-xs rounded font-medium transition-colors;
+  }
+
+  .btn-danger {
+    @apply px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded font-medium transition-colors;
+  }
+}
