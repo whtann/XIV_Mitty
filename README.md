@@ -1,0 +1,1 @@
+Project is in active development.  Expect bugs.  Initial goal is to have a good method of showing configured mit plans that is able to be saved + opened.  Designed to be highly configurable depending on encounter.
