@@ -53,6 +53,8 @@ export interface PlacedSkill {
   jobId: string
   /** Seconds from pull */
   startTime: number
+  /** Visual sub-row within the job track (0 = top) */
+  row?: number
 }
 
 export interface FightPlan {
@@ -76,6 +78,8 @@ export interface UIState {
   pixelsPerSecond: number
   currentFilePath: string | null
   isDirty: boolean
+  /** Live drag preview: which skill is being dragged, its target row, and the row it started from */
+  dragPreview: { id: string; row: number; originalRow: number } | null
 }
 
 // ── Mechanic color map ────────────────────────────────────────────────────────

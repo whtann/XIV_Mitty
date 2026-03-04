@@ -36,8 +36,8 @@ interface PlanStore {
   removeMechanic: (id: string) => void
 
   // ── Placed skills ────────────────────────────────────────────────────────
-  placeSkill: (skillDefinitionId: string, jobId: string, startTime: number) => void
-  moveSkill: (id: string, newStartTime: number, newJobId?: string) => void
+  placeSkill: (skillDefinitionId: string, jobId: string, startTime: number, row?: number) => void
+  moveSkill: (id: string, newStartTime: number, newJobId?: string, newRow?: number) => void
   removePlacedSkill: (id: string) => void
 
   // ── UI state ──────────────────────────────────────────────────────────────
@@ -46,6 +46,7 @@ interface PlanStore {
   setPixelsPerSecond: (pps: number) => void
   setFilePath: (path: string | null) => void
   markClean: () => void
+  setDragPreview: (preview: { id: string; row: number; originalRow: number } | null) => void
 
   // ── Serialization ─────────────────────────────────────────────────────────
   toJSON: () => string
@@ -56,7 +57,8 @@ const DEFAULT_UI: UIState = {
   selectedJobId: null,
   pixelsPerSecond: 4,
   currentFilePath: null,
-  isDirty: false
+  isDirty: false,
+  dragPreview: null
 }
 
 export const usePlanStore = create<PlanStore>((set, get) => ({
@@ -138,22 +140,22 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
   },
 
   // ── Placed skills ────────────────────────────────────────────────────────
-  placeSkill: (skillDefinitionId, jobId, startTime) => {
+  placeSkill: (skillDefinitionId, jobId, startTime, row?) => {
     const id = uuid()
-    const ps: PlacedSkill = { id, skillDefinitionId, jobId, startTime }
+    const ps: PlacedSkill = { id, skillDefinitionId, jobId, startTime, ...(row !== undefined ? { row } : {}) }
     set((s) => ({
       plan: { ...s.plan, placedSkills: [...s.plan.placedSkills, ps] },
       ui: { ...s.ui, isDirty: true }
     }))
   },
 
-  moveSkill: (id, newStartTime, newJobId) => {
+  moveSkill: (id, newStartTime, newJobId, newRow) => {
     set((s) => ({
       plan: {
         ...s.plan,
         placedSkills: s.plan.placedSkills.map((ps) =>
           ps.id === id
-            ? { ...ps, startTime: newStartTime, jobId: newJobId ?? ps.jobId }
+            ? { ...ps, startTime: newStartTime, jobId: newJobId ?? ps.jobId, row: newRow ?? ps.row }
             : ps
         )
       },
@@ -174,6 +176,7 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
   setPixelsPerSecond: (pps) => set((s) => ({ ui: { ...s.ui, pixelsPerSecond: Math.max(1, Math.min(20, pps)) } })),
   setFilePath: (path) => set((s) => ({ ui: { ...s.ui, currentFilePath: path } })),
   markClean: () => set((s) => ({ ui: { ...s.ui, isDirty: false } })),
+  setDragPreview: (preview) => set((s) => ({ ui: { ...s.ui, dragPreview: preview } })),
 
   // ── Serialization ─────────────────────────────────────────────────────────
   toJSON: () => JSON.stringify(get().plan, null, 2)

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { MECHANIC_COLORS, MECHANIC_LABELS } from '../../types'
 import type { Mechanic } from '../../types'
 import { formatTime, secondsToPixels } from '../../utils/time'
@@ -12,7 +12,14 @@ interface Props {
 
 export function MechanicMarker({ mechanic, pixelsPerSecond, onEdit }: Props): React.JSX.Element {
   const removeMechanic = usePlanStore((s) => s.removeMechanic)
+  const updateMechanic = usePlanStore((s) => s.updateMechanic)
   const [showTooltip, setShowTooltip] = useState(false)
+  const [tooltipBelow, setTooltipBelow] = useState(false)
+  const [liveDuration, setLiveDuration] = useState<number | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isResizing = useRef(false)
+  const resizeStartX = useRef(0)
+  const resizeStartDuration = useRef(0)
 
   const color =
     mechanic.type === 'custom' && mechanic.customColor
@@ -20,47 +27,100 @@ export function MechanicMarker({ mechanic, pixelsPerSecond, onEdit }: Props): Re
       : MECHANIC_COLORS[mechanic.type]
 
   const x = secondsToPixels(mechanic.timestamp, pixelsPerSecond)
-  const durationWidth = mechanic.duration
-    ? secondsToPixels(mechanic.duration, pixelsPerSecond)
-    : 0
+  const displayDuration = liveDuration ?? mechanic.duration ?? 0
+  const durationWidth = secondsToPixels(displayDuration, pixelsPerSecond)
+  const hitWidth = Math.max(2, durationWidth)
+
+  function handleResizeMouseDown(e: React.MouseEvent): void {
+    e.stopPropagation()
+    e.preventDefault()
+    isResizing.current = true
+    resizeStartX.current = e.clientX
+    resizeStartDuration.current = mechanic.duration ?? 0
+    setShowTooltip(false)
+
+    function onMouseMove(me: MouseEvent): void {
+      if (!isResizing.current) return
+      const delta = me.clientX - resizeStartX.current
+      const newDuration = Math.max(1, Math.round(resizeStartDuration.current + delta / pixelsPerSecond))
+      setLiveDuration(newDuration)
+    }
+
+    function onMouseUp(me: MouseEvent): void {
+      if (!isResizing.current) return
+      isResizing.current = false
+      const delta = me.clientX - resizeStartX.current
+      const newDuration = Math.max(1, Math.round(resizeStartDuration.current + delta / pixelsPerSecond))
+      updateMechanic(mechanic.id, { duration: newDuration })
+      setLiveDuration(null)
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }
 
   return (
-    <div className="absolute top-0 h-full" style={{ left: x }}>
-      {/* Optional duration bar behind the pin */}
-      {mechanic.duration && mechanic.duration > 0 && (
-        <div
-          className="absolute top-0 h-full opacity-20 rounded-r"
-          style={{ width: durationWidth, backgroundColor: color, left: 0 }}
-        />
-      )}
-
-      {/* The vertical pin line */}
+    <div
+      ref={containerRef}
+      className="absolute top-0 h-full cursor-pointer"
+      style={{ left: x, width: hitWidth }}
+      onMouseEnter={() => {
+        if (isResizing.current) return
+        if (containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect()
+          setTooltipBelow(rect.top < 120)
+        }
+        setShowTooltip(true)
+      }}
+      onMouseLeave={() => setShowTooltip(false)}
+      onClick={(e) => { e.stopPropagation(); onEdit(mechanic) }}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        removeMechanic(mechanic.id)
+      }}
+    >
+      {/* Solid colored block spanning full hit width */}
       <div
-        className="absolute w-0.5 h-full cursor-pointer"
+        className="absolute inset-0 flex items-center overflow-hidden rounded-r select-none"
         style={{ backgroundColor: color }}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-        onClick={(e) => { e.stopPropagation(); onEdit(mechanic) }}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          removeMechanic(mechanic.id)
-        }}
+      >
+        {/* Bright left-edge accent to mark the cast point */}
+        <div className="absolute left-0 top-0 h-full w-0.5 bg-white/40" />
+        {hitWidth > 40 && (
+          <span className="text-[10px] font-semibold text-white whitespace-nowrap overflow-hidden px-2">
+            {mechanic.name}
+          </span>
+        )}
+      </div>
+
+      {/* Resize handle on right edge */}
+      <div
+        className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-10 hover:bg-white/20 rounded-r"
+        onMouseDown={handleResizeMouseDown}
+        onClick={(e) => e.stopPropagation()}
       />
 
-      {/* Label above the pin */}
-      <div
-        className="absolute bottom-full mb-0.5 text-[10px] font-medium whitespace-nowrap pointer-events-none"
-        style={{ color, transform: 'translateX(-50%)', left: 0 }}
-      >
-        {mechanic.name}
-      </div>
+      {/* Floating label above for narrow (no-duration) mechanics */}
+      {hitWidth <= 40 && (
+        <div
+          className="absolute bottom-full mb-0.5 text-[10px] font-medium whitespace-nowrap pointer-events-none"
+          style={{ color, transform: 'translateX(-50%)', left: 0 }}
+        >
+          {mechanic.name}
+        </div>
+      )}
 
       {/* Tooltip */}
       {showTooltip && (
         <div
           className="absolute z-50 bg-[#1e2533] border border-[#3d4a5c] rounded p-2 text-xs text-[#e2e8f0] whitespace-nowrap shadow-lg pointer-events-none"
-          style={{ bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 24 }}
+          style={tooltipBelow
+            ? { top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 6 }
+            : { bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6 }
+          }
         >
           <div className="font-semibold" style={{ color }}>
             {mechanic.name}

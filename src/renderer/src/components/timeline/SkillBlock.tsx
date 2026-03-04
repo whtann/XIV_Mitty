@@ -1,9 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import type { PlacedSkill, SkillDefinition } from '../../types'
 import { formatTime, secondsToPixels } from '../../utils/time'
 import { usePlanStore } from '../../store/planStore'
+
+const ROW_HEIGHT = 36
 
 interface Props {
   placed: PlacedSkill
@@ -11,46 +13,62 @@ interface Props {
   pixelsPerSecond: number
   /** True if this skill overlaps with a previous use that hasn't finished its cooldown */
   isConflict: boolean
+  row?: number
+  /** Fight duration in seconds — used to clip blocks that would extend past the end */
+  trackDuration: number
 }
 
-export function SkillBlock({ placed, skill, pixelsPerSecond, isConflict }: Props): React.JSX.Element {
+export function SkillBlock({ placed, skill, pixelsPerSecond, isConflict, row = 0, trackDuration }: Props): React.JSX.Element {
   const removePlacedSkill = usePlanStore((s) => s.removePlacedSkill)
   const [showPopover, setShowPopover] = useState(false)
+  const [popoverBelow, setPopoverBelow] = useState(false)
+  const elemRef = useRef<HTMLDivElement | null>(null)
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: placed.id,
-    data: { type: 'placed-skill', placed, skill }
+    data: { type: 'placed-skill', placed, skill, displayRow: row }
   })
 
-  const effectWidth = secondsToPixels(skill.effectiveDuration, pixelsPerSecond)
-  const cooldownWidth = secondsToPixels(
-    Math.max(0, skill.cooldown - skill.effectiveDuration),
-    pixelsPerSecond
-  )
+  // Clip the visual blocks so they never extend past the end of the fight.
+  const cappedEffectEnd = Math.min(placed.startTime + skill.effectiveDuration, trackDuration)
+  const cappedSkillEnd = Math.min(placed.startTime + skill.cooldown, trackDuration)
+  const effectWidth = secondsToPixels(Math.max(0, cappedEffectEnd - placed.startTime), pixelsPerSecond)
+  const cooldownWidth = secondsToPixels(Math.max(0, cappedSkillEnd - cappedEffectEnd), pixelsPerSecond)
 
   const style: React.CSSProperties = {
     position: 'absolute',
     left: secondsToPixels(placed.startTime, pixelsPerSecond),
-    top: 4,
+    top: 4 + row * ROW_HEIGHT,
     height: 28,
-    opacity: isDragging ? 0.4 : 1,
+    opacity: isDragging ? 0 : 1,
     transform: CSS.Translate.toString(transform),
-    zIndex: isDragging ? 50 : 10,
+    zIndex: showPopover ? 100 : isDragging ? 50 : 10,
     cursor: 'grab',
-    display: 'flex'
+    display: 'flex',
+    transition: isDragging ? undefined : 'top 0.12s ease'
   }
 
   const endTime = placed.startTime + skill.cooldown
   const effectEnd = placed.startTime + skill.effectiveDuration
 
+  // Combine dnd-kit's setNodeRef with our own elemRef
+  const setRefs = (el: HTMLDivElement | null): void => {
+    setNodeRef(el)
+    elemRef.current = el
+  }
+
   return (
     <div
-      ref={setNodeRef}
+      ref={setRefs}
       style={style}
       {...attributes}
       {...listeners}
       onClick={(e) => {
         e.stopPropagation()
+        if (elemRef.current) {
+          const rect = elemRef.current.getBoundingClientRect()
+          setPopoverBelow(rect.top < 160)
+        }
         setShowPopover((v) => !v)
       }}
     >
@@ -85,7 +103,9 @@ export function SkillBlock({ placed, skill, pixelsPerSecond, isConflict }: Props
       {showPopover && (
         <div
           className="absolute z-50 bg-[#1e2533] border border-[#3d4a5c] rounded p-3 text-xs text-[#e2e8f0] shadow-xl"
-          style={{ bottom: '110%', left: 0, minWidth: 160 }}
+          style={popoverBelow
+            ? { top: '110%', left: 0, minWidth: 160 }
+            : { bottom: '110%', left: 0, minWidth: 160 }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
